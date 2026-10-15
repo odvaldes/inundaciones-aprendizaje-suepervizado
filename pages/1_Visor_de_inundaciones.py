@@ -20,8 +20,10 @@ from inundaciones_geo import (grid_from_polygon,load_dem_and_cover,terrain_featu
 
 st.set_page_config(page_title='Visor de inundaciones por tsunami, pluviales y fluviales',page_icon='🌊',layout='wide')
 st.title('Visor de inundaciones por tsunami, pluviales y fluviales')
+st.page_link('app.py', label='← Volver al visor de tsunami y catastro')
+st.success('Para seleccionar un polígono: elige «Polígono dibujado», usa la herramienta de dibujo del mapa y pulsa «Analizar territorio».')
 st.caption('Piloto Coquimbo–La Serena · GeoRiskAI Sentinel · complemento del visor de inversiones y cartas CITSU')
-st.info('Las escenas Sentinel-2 permiten detectar agua superficial histórica, no determinar por sí solas el máximo flujo ni la profundidad de una crecida. Los drenajes y abanicos son indicativos; los modelos supervisados requieren etiquetas observadas.')
+st.info('Las escenas Landsat y Sentinel-2 permiten detectar agua superficial histórica, no determinar por sí solas el máximo flujo ni la profundidad de una crecida. Los drenajes y abanicos son indicativos; los modelos supervisados requieren etiquetas observadas.')
 
 DATA=Path(__file__).resolve().parents[1]/'data'/'MDS_PROYECTOS 2024 2026.xlsx'
 @st.cache_data(show_spinner=False)
@@ -48,12 +50,13 @@ with left:
         idx=st.selectbox('Proyecto del catastro',range(len(options)),format_func=lambda i:options[i]);chosen=projects.iloc[idx]
         st.caption(f'Coordenadas: {chosen.lat:.5f}, {chosen.lon:.5f}')
     st.subheader('Imágenes multitemporales')
-    years=st.multiselect('Años a consultar',list(range(2017,2027)),default=[2018,2020,2023,2025])
+    years=st.multiselect('Años a consultar',list(range(2000,2027)),default=[2000,2005,2010,2015,2020,2025])
     months=st.multiselect('Meses (invierno/verano)',list(range(1,13)),default=[1,2,6,7,8,9])
     resolution=st.selectbox('Resolución de análisis (m)',[30,60,90],index=0)
     buffer_m=st.slider('Entorno de cerros y cuencas (km)',1,8,3)*1000
     channel_ha=st.slider('Área aportante mínima para drenaje (ha)',2,100,15)
     slope_limit=st.slider('Pendiente de detección de talud (°)',15,45,25)
+    st.caption('2000–2016: Landsat (NASA/USGS, 30 m). 2017–2026: Sentinel-2 (Copernicus, 10–20 m). El análisis raster utiliza la resolución seleccionada. No todas las fechas tienen escenas válidas.')
     st.subheader('Aprendizaje supervisado')
     event_type=st.selectbox('Amenaza a entrenar', ['fluvial','pluvial','tsunami'])
     training=st.file_uploader('Muestras etiquetadas (CSV opcional)',type='csv',help='Columnas lon,lat,inundado,tipo; profundidad_m opcional. Cada tipo se entrena por separado.')
@@ -96,10 +99,10 @@ def fetch_terrain(bounds_json,resolution,buffer_m,channel_ha,slope_limit):
     terr=terrain_features(dem,cover,grid,channel_ha,slope_limit)
     return grid,terr,meta
 
-@st.cache_data(show_spinner='Procesando imágenes Sentinel-2 históricas...',ttl=86400,max_entries=10)
+@st.cache_data(show_spinner='Procesando imágenes Landsat y Sentinel-2 históricas...',ttl=86400,max_entries=10)
 def fetch_history(bounds_json,resolution,buffer_m,years,months):
     grid=grid_from_polygon(shape(json.loads(bounds_json)),resolution,buffer_m)
-    return historical_sentinel(grid,years,months,max_scenes=18)
+    return historical_sentinel(grid,years,months,max_scenes=24)
 
 
 def overlay(map_obj,mask,grid,color,name,alpha=0.60):
@@ -153,7 +156,7 @@ if 'inund_geom' in st.session_state:
     categories,counts=np.unique(cover[inside&np.isfinite(cover)].astype(int),return_counts=True)
     st.dataframe(pd.DataFrame({'Clase WorldCover':[WORLDCOVER_NAMES.get(int(k),str(k)) for k in categories],'% área':[round(float(v)*100/counts.sum(),1) for v in counts]}),hide_index=True)
     st.warning('WorldCover distingue construido, vegetación y árboles; no determina pavimento impermeable exacto ni materialidad estructural de viviendas. Estas requieren otras fuentes y validación.')
-    st.markdown('**Imágenes históricas consultadas**')
+    st.markdown('**Imágenes históricas consultadas (Landsat / Sentinel-2)**')
     st.dataframe(pd.DataFrame(observations),use_container_width=True,hide_index=True)
     st.caption('La frecuencia NDWI representa agua superficial observada en escenas disponibles sin nubes. No identifica automáticamente crecidas máximas históricas ni su caudal.')
     st.markdown('**Análisis supervisado y profundidades**')
