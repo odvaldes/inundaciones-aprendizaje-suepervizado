@@ -42,6 +42,9 @@ st.sidebar.page_link(
     icon="🛰️",
 )
 st.sidebar.caption("Abre Inundaciones para dibujar polígonos y consultar imágenes históricas.")
+st.sidebar.page_link("pages/2_Incendios_forestales.py", label="Incendios forestales · Copernicus", icon="🔥")
+st.sidebar.page_link("pages/3_Relaves.py", label="Relaves · exposición territorial", icon="⛰️")
+
 st.markdown("### Visor de inundaciones por tsunami, pluviales y fluviales")
 st.page_link(
     "pages/1_Visor_de_inundaciones.py",
