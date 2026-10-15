@@ -33,6 +33,22 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Acceso visible a la página de inundaciones. La página debe estar en pages/.
+st.sidebar.markdown("### Navegación GeoRiskAI")
+st.sidebar.page_link("app.py", label="Tsunami y catastro de inversiones", icon="🌊")
+st.sidebar.page_link(
+    "pages/1_Visor_de_inundaciones.py",
+    label="Inundaciones: Copernicus + IA + polígonos",
+    icon="🛰️",
+)
+st.sidebar.caption("Abre Inundaciones para dibujar polígonos y consultar imágenes históricas.")
+st.markdown("### Visor de inundaciones por tsunami, pluviales y fluviales")
+st.page_link(
+    "pages/1_Visor_de_inundaciones.py",
+    label="🛰️ Abrir Copernicus, aprendizaje supervisado y selección de polígonos",
+)
+st.divider()
+
 APP_DIR = Path(__file__).resolve().parent
 BASE_DIR = APP_DIR / "data"
 
