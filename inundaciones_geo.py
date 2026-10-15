@@ -116,43 +116,83 @@ def terrain_features(dem,cover,grid,channel_hectares=15,slope_threshold=25):
     return {'slope':slope,'channels':channels,'taludes':taludes,'dist_channel':d_channel,'dist_talud':d_talud,'fan_candidate':fan_candidate,'accum_ha':area_ha,'cover':cover,'dem':dem}
 
 
-def historical_sentinel(grid,years,months,max_scenes=12):
-    """Lee escenas L2A multianuales. NDWI indica agua superficial, NO inundación confirmada."""
-    from datetime import datetime
-    all_items=[]
-    for year in years:
+def historical_sentinel(grid, years, months, max_scenes=24):
+    """Serie histórica 2000+: Landsat C2 L2 (2000-2016) y Sentinel-2 L2A (2017+).
+
+    NDWI detecta agua superficial observable, no extensión ni altura de inundación.
+    Se consulta una escena de baja nubosidad por mes/año, limitada por max_scenes.
+    """
+    selected = []
+    failures = []
+    for year in sorted(set(int(y) for y in years)):
+        if year < 2000 or year > 2026:
+            continue
+        collection = 'landsat-c2-l2' if year < 2017 else 'sentinel-2-l2a'
         try:
-            its=_stac_items('sentinel-2-l2a',grid['bbox'],f'{year}-01-01/{year}-12-31',query={'eo:cloud_cover':{'lt':45}},limit=80)
+            its = _stac_items(collection, grid['bbox'],
+                f'{year}-01-01/{year}-12-31',
+                query={'eo:cloud_cover': {'lt': 55}}, limit=150)
         except Exception as exc:
-            raise RuntimeError(f'Consulta Sentinel-2 {year}: {exc}') from exc
-        its=[i for i in its if i.datetime and i.datetime.month in months]
-        # Una escena por mes disponible; evita concentrar todas en la misma semana.
-        per_month={}
-        for i in sorted(its,key=lambda x:(x.datetime.month,x.properties.get('eo:cloud_cover',100))):
-            per_month.setdefault(i.datetime.month,i)
-        all_items.extend(per_month.values())
-    all_items=sorted(all_items,key=lambda x:x.datetime)[:max_scenes]
-    observations=[]; layers=[]
-    for item in all_items:
+            failures.append({'año':year,'fuente':collection,'error':str(exc)[:160]})
+            continue
+        its = [i for i in its if i.datetime and i.datetime.month in months]
+        by_month = {}
+        for item in sorted(its, key=lambda i: (i.datetime.month,
+                i.properties.get('eo:cloud_cover') or 100)):
+            by_month.setdefault(item.datetime.month, item)
+        selected.extend((collection, item) for item in by_month.values())
+    # Muestreo temporal repartido en toda la serie, no únicamente los primeros años.
+    selected.sort(key=lambda pair: pair[1].datetime)
+    if len(selected) > max_scenes:
+        indexes = np.linspace(0, len(selected)-1, max_scenes, dtype=int)
+        selected = [selected[i] for i in indexes]
+    observations = list(failures)
+    layers = []
+    for collection, item in selected:
         try:
-            green=_read_asset(item,['B03'],grid)
-            nir=_read_asset(item,['B08'],grid)
-            scl=_read_asset(item,['SCL'],grid,Resampling.nearest)
-            cloud=np.isin(scl,[0,1,3,8,9,10,11])
-            denom=green+nir
-            ndwi=np.divide(green-nir,denom,out=np.full_like(green,np.nan),where=np.abs(denom)>1e-6)
-            # Excluir nubes y sombras; NDWI>0.2 es indicio de agua, no evento.
-            water=(ndwi>0.2)&~cloud&np.isfinite(ndwi)
-            valid=~cloud&np.isfinite(ndwi)
+            if collection == 'sentinel-2-l2a':
+                green = _read_asset(item, ['B03'], grid)
+                nir = _read_asset(item, ['B08'], grid)
+                scl = _read_asset(item, ['SCL'], grid, Resampling.nearest)
+                invalid = np.isin(scl, [0, 1, 3, 8, 9, 10, 11]) | ~np.isfinite(scl)
+                source = 'Sentinel-2'
+            else:
+                # Landsat 5/7: SR_B2 verde, SR_B4 NIR;
+                # Landsat 8/9: SR_B3 verde, SR_B5 NIR.
+                platform = str(item.properties.get('platform','')).lower()
+                newer = any(t in platform for t in ('landsat-8','landsat-9','landsat_8','landsat_9'))
+                green_key = 'SR_B3' if newer else 'SR_B2'
+                nir_key = 'SR_B5' if newer else 'SR_B4'
+                green = _read_asset(item, [green_key.lower(), green_key], grid)
+                nir = _read_asset(item, [nir_key.lower(), nir_key], grid)
+                qa = _read_asset(item, ['qa_pixel','QA_PIXEL'], grid, Resampling.nearest)
+                qa_safe = np.nan_to_num(qa, nan=65535).astype(np.uint32)
+                # Bits 0-5: fill, nube dilatada, cirrus, nube, sombra, nieve.
+                invalid = ((qa_safe & 63) != 0) | ~np.isfinite(qa)
+                # Landsat Collection 2 Level-2: reflectancia = DN*0.0000275-0.2.
+                green = green * 0.0000275 - 0.2
+                nir = nir * 0.0000275 - 0.2
+                source = 'Landsat'
+            denom = green + nir
+            ndwi = np.divide(green-nir, denom,
+                out=np.full_like(green,np.nan), where=np.abs(denom)>1e-6)
+            valid = ~invalid & np.isfinite(ndwi)
+            water = (ndwi > 0.2) & valid
             layers.append((water,valid))
-            observations.append({'fecha':item.datetime.date().isoformat(),'nubosidad_escena_pct':round(item.properties.get('eo:cloud_cover',np.nan),1),'agua_detectada_pct':round(100*water.sum()/max(valid.sum(),1),2)})
+            observations.append({'fecha':item.datetime.date().isoformat(),
+                'fuente':source,
+                'nubosidad_escena_pct':round(float(item.properties.get('eo:cloud_cover') or 0),1),
+                'agua_detectada_pct':round(100*int(water.sum())/max(int(valid.sum()),1),2)})
         except Exception as exc:
-            observations.append({'fecha':item.datetime.date().isoformat(),'error':str(exc)[:180]})
-    if not layers:raise RuntimeError('No se lograron procesar escenas Sentinel-2 para los años y meses seleccionados.')
-    num=sum(w.astype(np.uint16) for w,v in layers)
-    den=sum(v.astype(np.uint16) for w,v in layers)
-    frequency=np.divide(num,den,out=np.full(grid['shape'],np.nan,dtype=np.float32),where=den>0)
-    return frequency,observations,den
+            observations.append({'fecha':item.datetime.date().isoformat(),
+                'fuente':collection,'error':str(exc)[:180]})
+    if not layers:
+        raise RuntimeError('No se procesaron escenas históricas. Revisa conectividad, fechas y cobertura STAC.')
+    numerator = sum(w.astype(np.uint16) for w,v in layers)
+    denominator = sum(v.astype(np.uint16) for w,v in layers)
+    frequency = np.divide(numerator,denominator,
+        out=np.full(grid['shape'],np.nan,dtype=np.float32),where=denominator>0)
+    return frequency,observations,denominator
 
 
 def score_depth_tsunami(depth):
