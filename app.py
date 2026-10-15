@@ -35,6 +35,7 @@ st.set_page_config(
 
 # Acceso visible a la página de inundaciones. La página debe estar en pages/.
 st.sidebar.markdown("### Navegación GeoRiskAI")
+st.sidebar.page_link("pages/4_Analisis_multiamenaza.py", label="🗺️ Evaluación integrada: todas las amenazas")
 st.sidebar.page_link("app.py", label="Tsunami y catastro de inversiones", icon="🌊")
 st.sidebar.page_link(
     "pages/1_Visor_de_inundaciones.py",
@@ -45,7 +46,10 @@ st.sidebar.caption("Abre Inundaciones para dibujar polígonos y consultar imáge
 st.sidebar.page_link("pages/2_Incendios_forestales.py", label="Incendios forestales · Copernicus", icon="🔥")
 st.sidebar.page_link("pages/3_Relaves.py", label="Relaves · exposición territorial", icon="⛰️")
 
-st.markdown("### Visor de inundaciones por tsunami, pluviales y fluviales")
+st.markdown("### GeoRiskAI Sentinel · Visor multiamenaza")
+st.page_link("pages/4_Analisis_multiamenaza.py", label="🗺️ Analizar tsunami, inundaciones, incendios y relaves en un mismo polígono")
+st.caption("Análisis territorial conjunto. Los indicadores preliminares se distinguen de los riesgos validados.")
+st.markdown("#### Visor de inundaciones por tsunami, pluviales y fluviales")
 st.page_link(
     "pages/1_Visor_de_inundaciones.py",
     label="🛰️ Abrir Copernicus, aprendizaje supervisado y selección de polígonos",

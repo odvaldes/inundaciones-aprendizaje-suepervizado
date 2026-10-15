@@ -1,23 +1,16 @@
-# GeoRiskAI Sentinel — ampliación incendios y relaves
+# GeoRiskAI Sentinel — Evaluación multiamenaza integrada
 
-Esta entrega contiene archivos para **añadir** al repositorio existente sin sustituir `data/`, cartas CITSU ni catastro de inversiones. Se usó como base la última versión local disponible de `app.py` y de la página de inundaciones.
+Se conserva `app.py` original y los módulos de inundación, incendios y relaves. Se agrega `pages/4_Analisis_multiamenaza.py` para consultar **el mismo polígono** y presentar juntos los indicadores de tsunami, inundaciones fluviales y pluviales, incendios forestales y relaves.
 
 ## Instalación
+Sube `app.py`, `inundaciones_geo.py`, `analisis_multiamenaza.py`, `requirements.txt` y los cuatro archivos dentro de `pages/` a tu repositorio GitHub, respetando la estructura. Conserva tu carpeta `data/` original con proyectos y cartas CITSU. En Streamlit el archivo principal es `app.py`.
 
-1. Conserva la carpeta `data/` y los archivos originales de tu repositorio.
-2. Copia `analisis_multiamenaza.py` a la raíz y los archivos `2_Incendios_forestales.py` y `3_Relaves.py` a `pages/`.
-3. En `app.py` incorpora los dos `st.sidebar.page_link(...)` que aparecen en este paquete, o reemplázalo **solo si corresponde a la misma versión base**.
-4. Agrega `requests` a `requirements.txt` solo si tu instalación lo necesita (no es obligatorio para estas dos páginas).
-5. En Streamlit sigue usando `app.py`.
-
-## Datos y limitaciones
-
-- Copernicus DEM GLO-30 y ESA WorldCover se consultan vía STAC Planetary Computer usando las funciones de `inundaciones_geo.py` ya existentes. Requiere conectividad y puede fallar por disponibilidad o límites de servicio.
-- El índice de incendio es **heurístico** y usa meteorología ingresada manualmente. No se ha entrenado un modelo supervisado ni conectado una API meteorológica en esta versión.
-- El análisis de relaves admite CSV `lat,lon,nombre` de fuente oficial. No incorpora automáticamente el catastro de SERNAGEOMIN ni estima estabilidad de depósitos.
-- La identificación de drenajes y taludes es preliminar (D8 aproximado, DEM ~30m); no equivale a cartografía validada de amenaza ni a simulación hidráulica.
-- Los indicadores NO deben interpretarse como probabilidad de incendio, falla de relaves, daño o pérdida esperada.
-
-## Pruebas
-
-Validación de sintaxis y pruebas unitarias de rangos de índices; pendiente prueba de acceso real a STAC y despliegue Streamlit Cloud.
+## Límites técnicos
+- La consulta Copernicus DEM / ESA WorldCover requiere conectividad STAC.
+- La consulta Landsat/Sentinel histórica es opcional y detecta agua superficial observable, no alturas ni caudales máximos.
+- Para tsunami se requiere profundidad validada proporcionada por el usuario o un raster validado en el módulo específico.
+- Para fluvial y pluvial faltan forzantes hidrológicos e hidráulicos para producir profundidades.
+- Para relaves, el indicador describe el terreno, no presencia de un depósito ni probabilidad de colapso.
+- Incendios utiliza meteorología ingresada manualmente, sin validación ni pronóstico.
+- El modelo supervisado se encuentra en la página de inundaciones y requiere datos etiquetados para entrenarse.
+- No se calcula un IRD agregado multiamenaza sin metodología validada.
